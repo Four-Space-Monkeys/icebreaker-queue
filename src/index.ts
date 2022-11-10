@@ -2,6 +2,8 @@
 import express from 'express';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
+import generateChannel from './generateChannel';
+import generateToken from './generateToken';
 
 const app = express();
 const port = 7777;
@@ -16,8 +18,15 @@ const queue: { [uid: string]: Socket } = {};
 
 function match(uid1: string, uid2: string) {
   console.log(`matching ${uid1} and ${uid2}`);
-  io.to(queue[uid1].id).emit('match-found', uid2);
-  io.to(queue[uid2].id).emit('match-found', uid1);
+  const channel = generateChannel();
+  io.to(queue[uid1].id).emit('match-found', JSON.stringify({
+    channel,
+    token: generateToken(Number(uid1), channel),
+  }));
+  io.to(queue[uid2].id).emit('match-found', JSON.stringify({
+    channel,
+    token: generateToken(Number(uid2), channel),
+  }));
   queue[uid1].disconnect();
   queue[uid2].disconnect();
 }
@@ -35,7 +44,7 @@ io.on('connection', (socket) => {
   let clientUid: string;
 
   socket.on('add-uid-to-queue', (uid: string) => {
-    if (clientUid) return; // only allow one queue slot per client
+    if (clientUid) return; // only allow one queue slot per connection - just to make sure
     console.log(`${uid} joined the queue`);
     queue[uid] = socket;
     console.log('new queue:', Object.keys(queue));
